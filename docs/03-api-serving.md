@@ -1,7 +1,6 @@
 # 03 - API Serving
 
-**Status:** Code done, not yet run end-to-end (needs a running FastAPI
-server + live OpenAI/Weaviate to test /ask for real)
+**Status:** Done - ran end-to-end against a live server, OpenAI, and Weaviate
 **Date:** 2026-09-24
 
 ## What we built
@@ -44,13 +43,21 @@ server + live OpenAI/Weaviate to test /ask for real)
 - **Repealed articles are flagged in the context** (`[REPEALED]` marker)
   rather than silently included, so the model can say "this article was
   repealed" instead of presenting outdated law as current.
+- **No `temperature` override on the generation call.** Originally set
+  `temperature=0.1` for more deterministic legal answers, but `gpt-5-mini`
+  is a reasoning model and rejects any value other than the default (1) -
+  `400 Unsupported value`. Removed rather than worked around, since there
+  isn't a way to lower it on this model family.
 
 ## How to run
 ```
-pip install -e .
-uvicorn agentic_rag.api.main:app --reload
-# then: POST http://localhost:8000/ask  {"question": "ما هي أهلية التصرف؟"}
+uv sync
+uv run python -m uvicorn agentic_rag.api.main:app --host 127.0.0.1 --port 8000
+# then: POST http://127.0.0.1:8000/ask  {"question": "ما هي أهلية التصرف؟"}
 ```
+(Use `python -m uvicorn` rather than the bare `uvicorn` command on
+Windows - a stray global `uvicorn.exe` on PATH can shadow the venv's own
+copy and load the wrong Python environment entirely.)
 
 ## Results / validation
 - `tests/test_generation.py` (4 tests) - `build_context()` heading
@@ -63,6 +70,18 @@ server - no network route to `api.openai.com` from this environment.
 Known retrieval-quality caveat from docs/02 still applies (heading
 tracker bug) - expect the retrieved-articles list to occasionally include
 a lexically-similar-but-wrong-topic article until that's fixed.
+
+Ran end-to-end locally afterward with a real question
+(`"ما هي أهلية التصرف؟"`): `/ask` returned a coherent, correctly-cited
+Arabic answer citing articles 6, 110 and 118 (all genuinely relevant per
+docs/02's manual check) plus 802. Notably, the model **skipped citing
+article 949** (possession - the clearly irrelevant retrieval from docs/02)
+on its own, even though it was in the context - the generation step adds
+a second filtering pass on top of imperfect retrieval, which softens the
+impact of the known heading-tracker bug somewhat. It still worked article
+802 (ownership/property rights) into the answer despite it not really
+being about legal capacity, because it's in the context and shares
+surface vocabulary ("تصرف") with the real topic.
 
 ## Known issues / next steps
 - No API-level tests yet (e.g. `TestClient` hitting `/ask` with mocked
