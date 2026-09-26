@@ -6,12 +6,13 @@ independently testable and swappable; this module just wires them
 together in the order the CLI script / DVC stage needs.
 """
 from __future__ import annotations
+
 import json
 from pathlib import Path
 
+from agentic_rag.rag import vectorstore
 from agentic_rag.rag.chunking import Chunk, build_chunks
 from agentic_rag.rag.embeddings import OpenAIEmbeddingClient
-from agentic_rag.rag import vectorstore
 from agentic_rag.rag.vectorstore import RetrievedArticle
 
 
@@ -26,6 +27,11 @@ def index_corpus(processed_json_path: Path, embedding_client: OpenAIEmbeddingCli
     chunks: list[Chunk] = build_chunks(articles)
 
     client = embedding_client or OpenAIEmbeddingClient()
+    # NOTE: embedding Chunk.text directly, not .embedding_text() -- the
+    # heading prefix that method would add is currently a constant string
+    # across the whole corpus (see chunking.Chunk.embedding_text
+    # docstring), so it's not wired in until the Step 0 heading tracker
+    # is fixed.
     vectors = client.embed_texts([c.text for c in chunks])
 
     with vectorstore.connect() as weaviate_client:

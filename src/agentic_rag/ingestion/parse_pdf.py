@@ -21,13 +21,13 @@ Known rough edges (tracked in docs/01-corpus-extraction.md):
   never gives 55-80 their own "Article N" headings, so there is nothing
   to promote to a full record without inventing data.
 """
-import re
-import json
-import unicodedata
 import argparse
+import json
+import re
+import unicodedata
 from pathlib import Path
 
-BIDI_CHARS = ''.join(['\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e'])
+BIDI_CHARS = '\u200e\u200f\u202a\u202b\u202c\u202d\u202e'
 BIDI_RE = re.compile(f'[{BIDI_CHARS}]')
 ARABIC_RE = re.compile(r'[\u0600-\u06FF]')
 SPLIT_RE = re.compile(r'\s{2,}')

@@ -9,7 +9,8 @@ they can be embedded and stored as separate vectors -- see
 docs/02-chunking-embedding.md for why.
 """
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+
+from dataclasses import asdict, dataclass
 from typing import Literal
 
 Language = Literal["ar", "en"]
@@ -34,6 +35,22 @@ class Chunk:
         d = asdict(self)
         d.pop("chunk_id")
         return d
+
+    def embedding_text(self) -> str:
+        """Text intended to be sent to the embedding model instead of the
+        bare `text` -- distinct from it so the stored/display text used for
+        citation and LLM context later stays untouched.
+
+        NOT currently wired into the indexing pipeline (see pipeline.py):
+        the chapter/topic heading tracker in ingestion/parse_pdf.py is
+        broken (stuck on the document's first heading for every article,
+        see docs/01-corpus-extraction.md), so prepending it right now adds
+        the same constant prefix to all 2,172 chunks -- no discriminating
+        signal, just wasted tokens. Wire this in once that tracker is
+        actually fixed.
+        """
+        heading = " - ".join(p for p in (self.chapter, self.topic) if p)
+        return f"{heading}\n{self.text}" if heading else self.text
 
 
 def build_chunks(articles: list[dict]) -> list[Chunk]:

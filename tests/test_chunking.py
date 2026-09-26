@@ -41,3 +41,16 @@ def test_metadata_is_carried_through():
     ar_chunk = next(c for c in chunks if c.language == "ar")
     assert ar_chunk.chapter == "SECTION I"
     assert ar_chunk.citation == "Egyptian Civil Code, Article 1"
+
+
+def test_embedding_text_prefixes_heading_but_leaves_text_clean():
+    chunks = build_chunks([_article(chapter="SECTION I", topic="1. Application of Laws")])
+    ar_chunk = next(c for c in chunks if c.language == "ar")
+    assert ar_chunk.text == "نص عربي"  # stored/display text stays untouched
+    assert ar_chunk.embedding_text() == "SECTION I - 1. Application of Laws\nنص عربي"
+
+
+def test_embedding_text_falls_back_to_plain_text_with_no_heading():
+    chunks = build_chunks([_article(chapter=None, topic=None)])
+    ar_chunk = next(c for c in chunks if c.language == "ar")
+    assert ar_chunk.embedding_text() == ar_chunk.text

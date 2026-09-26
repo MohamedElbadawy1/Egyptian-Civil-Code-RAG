@@ -8,17 +8,19 @@ vectors rather than diluting similarity against a mixed embedding. See
 docs/02-chunking-embedding.md for the reasoning.
 """
 from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 
-from agentic_rag import config  # noqa: F401 -- side effect: loads .env before os.environ reads below
-
 import weaviate
 from weaviate.auth import AuthApiKey
-from weaviate.classes.config import Configure, Property, DataType
+from weaviate.classes.config import Configure, DataType, Property
 from weaviate.classes.init import AdditionalConfig, Timeout
 from weaviate.util import generate_uuid5
 
+from agentic_rag import (
+    config,  # noqa: F401 -- side effect: loads .env before os.environ reads below
+)
 from agentic_rag.rag.chunking import Chunk
 
 COLLECTION_NAME = "CivilCodeArticle"

@@ -14,13 +14,16 @@ strong multilingual/Arabic performer (MIRACL ~55), and the paid tier
 doesn't hit the same wall for a corpus this size (~2,172 chunks).
 """
 from __future__ import annotations
+
 import os
 import time
 from dataclasses import dataclass
 
-from agentic_rag import config  # noqa: F401 -- side effect: loads .env before os.environ reads below
-
 from openai import OpenAI, RateLimitError
+
+from agentic_rag import (
+    config,  # noqa: F401 -- side effect: loads .env before os.environ reads below
+)
 
 DEFAULT_MODEL = "text-embedding-3-large"
 # Matryoshka-truncated from the model's native 3072 dims: good
@@ -52,10 +55,10 @@ class OpenAIEmbeddingClient:
     distinction is a drop-in replacement.
     """
 
-    def __init__(self, api_key: str | None = None, config: EmbeddingConfig | None = None):
+    def __init__(self, api_key: str | None = None, embedding_config: EmbeddingConfig | None = None):
         api_key = api_key or os.environ["OPENAI_API_KEY"]
         self._client = OpenAI(api_key=api_key)
-        self.config = config or EmbeddingConfig()
+        self.config = embedding_config or EmbeddingConfig()
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """Embed a list of documents for indexing. Batches internally."""
@@ -92,7 +95,8 @@ class OpenAIEmbeddingClient:
                 wait = RATE_LIMIT_BACKOFF_SECONDS * (attempt + 1)
                 print(f"  rate limited, waiting {wait}s before retry {attempt + 1}/{MAX_RETRIES}...")
                 time.sleep(wait)
-            except Exception as e:  # other transient network errors
+            except Exception as e:  # noqa: BLE001 -- deliberately broad: any
+                # transient network/SDK error should be retried the same way
                 last_err = e
                 time.sleep(2 ** attempt)
         raise RuntimeError(f"Embedding batch failed after {MAX_RETRIES} retries") from last_err
