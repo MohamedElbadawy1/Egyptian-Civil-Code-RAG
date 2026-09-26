@@ -27,12 +27,10 @@ def index_corpus(processed_json_path: Path, embedding_client: OpenAIEmbeddingCli
     chunks: list[Chunk] = build_chunks(articles)
 
     client = embedding_client or OpenAIEmbeddingClient()
-    # NOTE: embedding Chunk.text directly, not .embedding_text() -- the
-    # heading prefix that method would add is currently a constant string
-    # across the whole corpus (see chunking.Chunk.embedding_text
-    # docstring), so it's not wired in until the Step 0 heading tracker
-    # is fixed.
-    vectors = client.embed_texts([c.text for c in chunks])
+    # Embeds the heading-prefixed text now that the heading tracker
+    # produces real per-article context (see Chunk.embedding_text
+    # docstring) instead of the same constant string for every chunk.
+    vectors = client.embed_texts([c.embedding_text() for c in chunks])
 
     with vectorstore.connect() as weaviate_client:
         vectorstore.ensure_collection(weaviate_client)
