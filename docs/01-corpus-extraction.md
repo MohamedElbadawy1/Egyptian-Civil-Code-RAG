@@ -45,3 +45,13 @@ or via the DVC stage: `dvc repro build_corpus` (once `dvc.yaml` is added).
 - Repealed spans with no standalone heading (e.g. 55-80) have no record
   of their own; worth a placeholder-record pass if peer reviewers expect
   every number 1-1149 to resolve to *something*.
+- **Heading tracker is effectively non-functional.** Verified against the
+  live corpus (see docs/02-chunking-embedding.md): every one of the 1086
+  articles' `chapter`/`topic` fields resolves to the document's very
+  first heading ("SECTION I - 1. Laws and Rights"), including article 802
+  near the end of the code. The tracker's `not current` guard means it
+  basically never fires again once the first article starts. This matters
+  more than it looked like at first pass - it's blocking heading context
+  from being usable anywhere downstream (retrieval, citations). Tracked
+  as a backlog item; needs a real rewrite of the heading-detection logic
+  in `parse_pdf.py`, not a patch.

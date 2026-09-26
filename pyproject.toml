@@ -7,7 +7,16 @@ authors = [
     { name = "Mo Elbadawy", email = "mohamed.asaad.elbadawy@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "black>=26.5.1",
+    "google-genai>=0.3",
+    "ipykernel>=7.3.0",
+    "openai>=3.19.2",
+    "pytest>=9.1.1",
+    "python-dotenv>=1.0",
+    "ruff>=0.16.9",
+    "weaviate-client>=4.9",
+]
 
 [project.scripts]
 agentic-rag = "agentic_rag:main"
