@@ -1,7 +1,7 @@
 # 01 - Corpus Extraction
 
-**Status:** Done (v1, known rough edges)
-**Date:** 2026-09-24
+**Status:** Done - heading tracker bug found and fixed
+**Date:** 2026-09-24 (updated: fixed heading tracker after seeing its real impact on retrieval in docs/02)
 
 ## What we built
 `src/agentic_rag/ingestion/parse_pdf.py` converts the raw bilingual PDF
@@ -33,25 +33,25 @@ or via the DVC stage: `dvc repro build_corpus` (once `dvc.yaml` is added).
 - 1086 article records parsed, numbered 1-1149 (gaps = repealed ranges)
 - 0 duplicate article numbers
 - 0 records with empty Arabic text
+- After the heading-tracker fix: 72 distinct (book, chapter, section,
+  topic) combinations across the 1086 articles (was 1 before the fix)
 
 ## Known issues / next steps
 - Some Arabic alef/hamza glyph sequences come out reshaped (e.g. a stray
   alef before a hamza-initial word) - needs a proper Arabic text
   normalizer before this goes into chunking/embedding.
-- Sub-headings sometimes leak into the previous article's body instead
-  of starting a fresh heading context.
+- **Heading tracker fixed.** Root cause was case-sensitivity: the old
+  tracker only matched fully-uppercase headings (`en.isupper()`), so
+  mixed-case ones like `"Chapter I"` / `"Section I"` were invisible to
+  it, and a heading-line-between-articles could get appended to the
+  previous article's body instead of being recognized at all. Rewrote
+  with case-insensitive `BOOK`/`Chapter`/`Section`/numbered-topic regexes
+  that are checked (and `continue`d past) *before* the article-body
+  append step, and each level resets everything below it (a new Book
+  clears chapter/section/topic, a new Section clears topic). See
+  docs/02-chunking-embedding.md for how this changed retrieval quality.
 - No page-number tracking yet (`source_page` is always null) - would help
   with citation display later.
 - Repealed spans with no standalone heading (e.g. 55-80) have no record
   of their own; worth a placeholder-record pass if peer reviewers expect
   every number 1-1149 to resolve to *something*.
-- **Heading tracker is effectively non-functional.** Verified against the
-  live corpus (see docs/02-chunking-embedding.md): every one of the 1086
-  articles' `chapter`/`topic` fields resolves to the document's very
-  first heading ("SECTION I - 1. Laws and Rights"), including article 802
-  near the end of the code. The tracker's `not current` guard means it
-  basically never fires again once the first article starts. This matters
-  more than it looked like at first pass - it's blocking heading context
-  from being usable anywhere downstream (retrieval, citations). Tracked
-  as a backlog item; needs a real rewrite of the heading-detection logic
-  in `parse_pdf.py`, not a patch.

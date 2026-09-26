@@ -9,13 +9,21 @@ strip bidi control chars, and reassemble two parallel text streams
 on the English stream ("Article N"), which is the most reliable anchor
 since Arabic-Indic numerals and RTL reshaping make the Arabic side noisier.
 
+Heading hierarchy (Book > Chapter > Section > numbered topic) is tracked
+the same way, anchored on the English side: "BOOK I", "Chapter I" /
+"CHAPTER I", "Section I" / "SECTION I", and numbered sub-headings like
+"1. Laws and Rights". A heading line is recognized and consumed *before*
+either the repeal-marker check or the "append to current article" step,
+so it never leaks into the body of whatever article came before it - see
+docs/01-corpus-extraction.md for the earlier bug this replaces (the old
+tracker only matched fully-uppercase headings, so "Chapter I" / "Section
+I" in mixed case were invisible to it and every article ended up with the
+same first-heading metadata).
+
 Known rough edges (tracked in docs/01-corpus-extraction.md):
 - Some Arabic alef/hamza glyph sequences come out reshaped (e.g. a stray
   alef before a hamza-initial word). Needs a proper Arabic text
   normalizer pass before embedding.
-- Sub-headings that appear on the same "paragraph" as the previous
-  article's closing line can leak into that article's text instead of
-  starting a fresh heading context.
 - Repealed ranges (e.g. Articles 54-80) are flagged via a `repealed_set`
   but only the anchor article gets its own record; the source PDF itself
   never gives 55-80 their own "Article N" headings, so there is nothing
@@ -64,6 +72,15 @@ ARTICLE_EN_RE = re.compile(r'^Article\s+(\d+)\s*$', re.IGNORECASE)
 REPEALED_RANGE_RE = re.compile(r'Articles?\s+(\d+)\s*-\s*(\d+)\s+(?:have been\s+)?repealed', re.IGNORECASE)
 REPEALED_SINGLE_RE = re.compile(r'^Article\s+(\d+)\s+repealed', re.IGNORECASE)
 
+# Case-insensitive on purpose: the source PDF is inconsistent, mixing
+# "SECTION II" (all caps) with "Section I" (title case) for the same
+# hierarchy level. A trailing title fragment is captured where present
+# (e.g. "Section I The Right of Ownership in General").
+BOOK_RE = re.compile(r'^BOOK\s+([IVXLCDM]+)\.?\s*$', re.IGNORECASE)
+CHAPTER_RE = re.compile(r'^Chapter\s+([IVXLCDM]+)\b\.?\s*(.*)$', re.IGNORECASE)
+SECTION_RE = re.compile(r'^Section\s+([IVXLCDM]+)\b\.?\s*(.*)$', re.IGNORECASE)
+TOPIC_RE = re.compile(r'^(\d+)\.\s+([A-Za-z].*)$')
+
 
 def parse(layout_text_path: Path) -> list[dict]:
     """Parse a `pdftotext -layout` text dump of the Civil Code into article records."""
@@ -87,6 +104,43 @@ def parse(layout_text_path: Path) -> list[dict]:
         if not line.strip():
             continue
         en, ar = split_line(line)
+
+        # Heading lines are recognized (and consumed via `continue`)
+        # *before* the repeal-marker check or the article-body append
+        # below, so they never end up appended to the previous article's
+        # text. A heading also resets every level below it, so a stale
+        # section/topic from the previous chapter can't linger.
+        m_book = BOOK_RE.match(en)
+        if m_book:
+            heading_stack['book'] = f"Book {m_book.group(1)}"
+            heading_stack['chapter'] = None
+            heading_stack['section'] = None
+            heading_stack['topic'] = None
+            continue
+
+        m_chapter = CHAPTER_RE.match(en)
+        if m_chapter:
+            label = f"Chapter {m_chapter.group(1)}"
+            if m_chapter.group(2):
+                label += f" - {m_chapter.group(2).strip()}"
+            heading_stack['chapter'] = label
+            heading_stack['section'] = None
+            heading_stack['topic'] = None
+            continue
+
+        m_section = SECTION_RE.match(en)
+        if m_section:
+            label = f"Section {m_section.group(1)}"
+            if m_section.group(2):
+                label += f" - {m_section.group(2).strip()}"
+            heading_stack['section'] = label
+            heading_stack['topic'] = None
+            continue
+
+        m_topic = TOPIC_RE.match(en)
+        if m_topic:
+            heading_stack['topic'] = m_topic.group(2).strip()
+            continue
 
         m_range = REPEALED_RANGE_RE.search(en)
         if m_range:
@@ -113,13 +167,6 @@ def parse(layout_text_path: Path) -> list[dict]:
                 'citation': f"Egyptian Civil Code, Article {m.group(1)}",
             }
             continue
-
-        # Crude heading tracker: short all-caps English lines outside an
-        # article update the chapter; numbered "N. Topic" lines update topic.
-        if en and en.isupper() and len(en.split()) <= 8 and not current:
-            heading_stack['chapter'] = en
-        elif en and re.match(r'^\d+\.\s+\S', en) and not current:
-            heading_stack['topic'] = en
 
         if current is not None:
             current['text_en'] += (' ' if current['text_en'] else '') + en
