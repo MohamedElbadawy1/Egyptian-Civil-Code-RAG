@@ -69,6 +69,5 @@ class GenerationClient:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
             ],
-            temperature=0.1,
         )
         return resp.choices[0].message.content
