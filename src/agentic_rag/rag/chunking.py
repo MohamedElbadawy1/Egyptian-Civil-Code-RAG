@@ -37,19 +37,21 @@ class Chunk:
         return d
 
     def embedding_text(self) -> str:
-        """Text intended to be sent to the embedding model instead of the
-        bare `text` -- distinct from it so the stored/display text used for
-        citation and LLM context later stays untouched.
+        """Text sent to the embedding model -- distinct from `text`, which
+        stays the clean article body used for citation and as LLM context
+        later.
 
-        NOT currently wired into the indexing pipeline (see pipeline.py):
-        the chapter/topic heading tracker in ingestion/parse_pdf.py is
-        broken (stuck on the document's first heading for every article,
-        see docs/01-corpus-extraction.md), so prepending it right now adds
-        the same constant prefix to all 2,172 chunks -- no discriminating
-        signal, just wasted tokens. Wire this in once that tracker is
-        actually fixed.
+        Prepending the book/chapter/section/topic heading gives the model
+        surrounding legal context a bare 1-3 sentence article often lacks
+        on its own (e.g. distinguishing "a minor's transactions are void"
+        under Book I - capacity from "the owner's right to use property"
+        under Book III - ownership, which share surface vocabulary like
+        "تصرف" but are unrelated legal concepts). Wired into the indexing
+        pipeline now that ingestion/parse_pdf.py's heading tracker
+        actually produces distinct headings per article (previously it
+        was a no-op - see docs/02-chunking-embedding.md history).
         """
-        heading = " - ".join(p for p in (self.chapter, self.topic) if p)
+        heading = " - ".join(p for p in (self.book, self.chapter, self.section, self.topic) if p)
         return f"{heading}\n{self.text}" if heading else self.text
 
 
