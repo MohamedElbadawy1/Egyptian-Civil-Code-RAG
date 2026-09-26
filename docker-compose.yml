@@ -1,0 +1,10 @@
+# Local dev convenience: `docker compose up --build` and hit
+# http://localhost:8000/docs. Weaviate is the Cloud Sandbox instance
+# (see .env), not containerized here -- nothing to run locally for it.
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env

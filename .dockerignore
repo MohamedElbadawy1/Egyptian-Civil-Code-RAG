@@ -1,0 +1,21 @@
+.venv
+.git
+.github
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+
+# never bake secrets into the image -- injected via env at runtime
+.env
+
+# not needed at runtime: ingestion is a one-time offline step
+data/raw
+
+# dev-only, not needed in the image
+tests
+docs
+reports
+infra
+*.zip
+.dvc
