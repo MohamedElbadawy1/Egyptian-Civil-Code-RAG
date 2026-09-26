@@ -77,9 +77,14 @@ Two issues hit and fixed along the way:
   harmless (it works fine), but a full `dvc repro` / fresh environment
   from now on creates it with the new-style config.
 
-## Retrieval quality baseline (MVP, not final)
-Manually tested one query end-to-end: `"ما هي أهلية التصرف؟"` (capacity to
-transact) against the live index, `top_k=5`:
+## Retrieval quality baseline (superseded - see below)
+~~Manually tested one query end-to-end: `"ما هي أهلية التصرف؟"` (capacity to
+transact) against the live index, `top_k=5`~~ - this section described
+results from *before* the heading tracker was fixed (docs/01). Kept below
+for history; see "Retrieval quality after the heading fix" for the
+current state.
+
+Original test:
 
 | Article | Relevant? | Notes |
 |---|---|---|
@@ -99,15 +104,32 @@ the same first heading, it added zero discriminating signal. Reverted
 that from the indexing pipeline rather than ship a change that does
 nothing.
 
-**Decision:** accept this as the MVP baseline rather than block on fixing
-headings now. Reasoning: (1) the fix belongs in Step 0's parser, not
-here, and is a real rewrite, not a patch; (2) Step 07
-(evaluation/monitoring) already has RAGAS evaluation on the roadmap,
-which will give a systematic quality signal across many questions instead
-of one anecdotal query - better to prioritize headings once we have that
-data showing how much it actually matters, not guess. Revisit after Step
-07, or sooner if API-level testing in Step 03 surfaces retrieval quality
-as a bigger blocker than expected.
+**Decision (superseded):** accepted this as an MVP baseline rather than
+block on fixing headings immediately. Revisited sooner than planned once
+the Step 03 API test surfaced the same 802/949 problem in a real answer -
+see docs/03-api-serving.md.
+
+## Retrieval quality after the heading fix
+With the heading tracker fixed (docs/01), `Chunk.embedding_text()` is now
+wired into the indexing pipeline (`pipeline.py` embeds
+`c.embedding_text()`, not `c.text()`), prefixing each chunk with its real
+book/chapter/section/topic before embedding.
+
+**Re-indexing required:** since the embedding *input* changed for every
+chunk, the whole corpus needs re-embedding and re-upserting - the old
+vectors in Weaviate reflect the pre-fix (unprefixed) text. Idempotent
+upserts (UUID keyed on `chunk_id`) mean re-running
+`scripts/build_index.py` updates the existing objects in place rather
+than duplicating them:
+```
+uv run python -m scripts.build_index --corpus data/processed/civil_code_articles.json
+```
+
+**Not yet re-tested with the same query** - do that after re-indexing and
+update this section with the new top-5 for `"ما هي أهلية التصرف؟"`, ideally
+confirming articles 802/949 either drop out of the top-5 or rank
+noticeably lower now that they carry `Book III` metadata instead of the
+same heading as articles 6/110/118 (`Book I`).
 
 ## Known issues / next steps
 - Sub-headings sometimes leak into the previous article's body instead
@@ -119,6 +141,7 @@ as a bigger blocker than expected.
   (only the embedding calls retry) - watch for batch failures at scale.
 - `search()`'s over-fetch factor (`top_k * 2`) is a starting guess, not
   tuned against real retrieval results yet.
-- `Chunk.embedding_text()` (heading-prefixed embedding input) exists but
-  is unused until the Step 0 heading tracker is fixed - see "Retrieval
-  quality baseline" above.
+- Re-indexing with the heading-prefixed embedding text is still pending
+  (see "Retrieval quality after the heading fix" above) - do that and
+  confirm the 802/949 mis-ranking actually improved before considering
+  this step fully closed.
