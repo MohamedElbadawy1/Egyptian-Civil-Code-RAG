@@ -1,0 +1,30 @@
+# DVC pipeline: reproducible, dependency-tracked stages. `dvc repro` only
+# re-runs a stage if its declared deps changed since the last run -- e.g.
+# editing parse_pdf.py re-runs build_corpus but not build_index, unless
+# the corpus JSON it depends on also changed.
+stages:
+  build_corpus:
+    cmd: >-
+      pdftotext -layout data/raw/egyptian_civil_code.pdf data/interim/civil_code_layout.txt &&
+      uv run python src/agentic_rag/ingestion/parse_pdf.py
+      --input data/interim/civil_code_layout.txt
+      --output data/processed/civil_code_articles.json
+    deps:
+      - data/raw/egyptian_civil_code.pdf
+      - src/agentic_rag/ingestion/parse_pdf.py
+    outs:
+      - data/processed/civil_code_articles.json
+
+  build_index:
+    cmd: uv run python -m scripts.build_index --corpus data/processed/civil_code_articles.json
+    deps:
+      - data/processed/civil_code_articles.json
+      - src/agentic_rag/rag/chunking.py
+      - src/agentic_rag/rag/embeddings.py
+      - src/agentic_rag/rag/vectorstore.py
+      - src/agentic_rag/rag/pipeline.py
+    # No `outs` here: the output is Weaviate (an external service), not a
+    # local file DVC can hash and version. This stage still gets re-run
+    # by `dvc repro` when its deps change; it just isn't a producer of a
+    # DVC-tracked artifact.
+    always_changed: false

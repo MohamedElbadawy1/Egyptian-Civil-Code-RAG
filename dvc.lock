@@ -1,0 +1,46 @@
+schema: '2.0'
+stages:
+  build_corpus:
+    cmd: pdftotext -layout data/raw/egyptian_civil_code.pdf 
+      data/interim/civil_code_layout.txt && uv run python 
+      src/agentic_rag/ingestion/parse_pdf.py --input 
+      data/interim/civil_code_layout.txt --output 
+      data/processed/civil_code_articles.json
+    deps:
+    - path: data/raw/egyptian_civil_code.pdf
+      hash: md5
+      md5: 5086ef5f16f15d856278db943e58e948
+      size: 2599703
+    - path: src/agentic_rag/ingestion/parse_pdf.py
+      hash: md5
+      md5: 6e5c0b5353f7b2ee8514cdee627470ab
+      size: 8766
+    outs:
+    - path: data/processed/civil_code_articles.json
+      hash: md5
+      md5: cdcf4739aa9adf4fee563bb4b12fe4a0
+      size: 1198001
+  build_index:
+    cmd: uv run python -m scripts.build_index --corpus 
+      data/processed/civil_code_articles.json
+    deps:
+    - path: data/processed/civil_code_articles.json
+      hash: md5
+      md5: cdcf4739aa9adf4fee563bb4b12fe4a0
+      size: 1198001
+    - path: src/agentic_rag/rag/chunking.py
+      hash: md5
+      md5: 1ddfe5a74d2aeb2d592ded61067e9433
+      size: 3200
+    - path: src/agentic_rag/rag/embeddings.py
+      hash: md5
+      md5: f2db20c458511f70d118e3628820115a
+      size: 4260
+    - path: src/agentic_rag/rag/pipeline.py
+      hash: md5
+      md5: 9b269639a378ccdf7acafeb737d2cb9e
+      size: 2883
+    - path: src/agentic_rag/rag/vectorstore.py
+      hash: md5
+      md5: b0ead374e6eb6a0fc9029fdcab0aaf1b
+      size: 4895
