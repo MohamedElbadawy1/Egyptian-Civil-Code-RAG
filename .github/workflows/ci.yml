@@ -22,6 +22,12 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: agentic-rag:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # A build that succeeds isn't enough: the image built fine even when
+      # the corpus JSON was missing from git, and only /ask would break.
+      - name: Smoke test - corpus is baked into the image
+        run: |
+          docker run --rm agentic-rag:ci python -c "from agentic_rag.rag.corpus import load_corpus_index; n = len(load_corpus_index()); assert n > 1000, n; print('articles in image:', n)"

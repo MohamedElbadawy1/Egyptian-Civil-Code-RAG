@@ -67,6 +67,16 @@ running container?) so this doc can be updated with real results, same
 as every other step.
 
 ## Known issues / next steps
+- **Corpus must be in git for CI to bake it into the image.** After Step
+  05 briefly moved the JSON fully under DVC, the CI image built fine but
+  contained no corpus. CI now smoke-tests the built image (loads the
+  corpus, asserts >1000 articles); see docs/05 for the fix.
+- Docker build initially failed at the final `uv sync --frozen --no-dev`
+  step with `failed to open file /app/README.md` - hatchling (the build
+  backend) reads `README.md` for project metadata when building the
+  `agentic-rag` package itself, but the Dockerfile only copied `src/` and
+  `data/processed/`. Fixed by adding `COPY README.md ./` right before that
+  step.
 - No registry configured - image only exists locally / in CI's ephemeral
   build cache right now, nowhere to `docker pull` it from yet.
 - No actual deployment target chosen yet (a VM, a PaaS like Render/Fly.io,
