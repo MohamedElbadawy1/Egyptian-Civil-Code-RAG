@@ -13,7 +13,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "black", "dvc"]
+dev = [
+    "pytest",
+    "ruff",
+    "black",
+    "dvc",
+    "ragas>=0.2",
+    "datasets>=2.20",
+    # ragas imports ChatVertexAI from langchain-community unconditionally
+    # at module load time (even though we only use OpenAI) - that class
+    # was removed from langchain-community in 0.4.2, breaking `import
+    # ragas` entirely. Pin below that until ragas fixes the import.
+    "langchain-community<0.4.2",
+]
 
 [build-system]
 requires = ["hatchling"]

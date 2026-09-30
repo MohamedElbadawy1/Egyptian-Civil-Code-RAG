@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cap-01",
+    "question": "على من تسري النصوص المتعلقة بالأهلية؟",
+    "expected_articles": [6],
+    "ground_truth": "النصوص المتعلقة بالأهلية تسري على جميع الأشخاص الذين تتوافر فيهم الشروط التي تنص عليها هذه النصوص."
+  },
+  {
+    "id": "cap-02",
+    "question": "هل يجوز للشخص أن يتنازل عن أهليته القانونية؟",
+    "expected_articles": [48],
+    "ground_truth": "لا يجوز لأي شخص أن يتنازل عن أهليته أو أن يعدّل في الأحكام المقررة لها."
+  },
+  {
+    "id": "cap-03",
+    "question": "ما حكم تصرفات الصغير غير المميز في ماله؟",
+    "expected_articles": [110],
+    "ground_truth": "ليس للصغير غير المميز حق التصرف في ماله، وجميع تصرفاته تكون باطلة."
+  },
+  {
+    "id": "cap-04",
+    "question": "متى تكون تصرفات الأولياء والأوصياء والقوام صحيحة؟",
+    "expected_articles": [118],
+    "ground_truth": "تصرفات الأولياء والأوصياء والقوام تكون صحيحة في الحدود التي رسمها القانون لكل منهم."
+  },
+  {
+    "id": "own-01",
+    "question": "ما هي الحقوق التي يملكها مالك الشيء؟",
+    "expected_articles": [802],
+    "ground_truth": "لمالك الشيء وحده، في حدود القانون، حق استعماله واستغلاله والتصرف فيه."
+  },
+  {
+    "id": "own-02",
+    "question": "متى لا تقوم الحيازة قانونًا؟",
+    "expected_articles": [949],
+    "ground_truth": "لا تقوم الحيازة على عمل يأتيه شخص على أنه مجرد رخصة من المباحات، أو عمل يتحمله الغير على سبيل التسامح، وإذا اقترنت الحيازة بإكراه أو حصلت خفية أو كان فيها لبس فلا يكون لها أثر إلا من الوقت الذي يزول فيه هذا العيب."
+  },
+  {
+    "id": "own-03",
+    "question": "هل هناك قيود على استعمال صاحب الحق لحقه؟",
+    "expected_articles": [806],
+    "ground_truth": "عند استعمال الحق يجب مراعاة ما تقضي به القوانين واللوائح المتعلقة بالمصلحة العامة أو الخاصة."
+  },
+  {
+    "id": "inherit-01",
+    "question": "كيف تُنظَّم أهلية المتقاسمين في القسمة المؤقتة للميراث؟",
+    "expected_articles": [848],
+    "ground_truth": "في القسمة المؤقتة للميراث تُراعى أحكام أهلية المتقاسمين وفق الضوابط التي يحيل إليها النص بشأن عقد الإيجار."
+  },
+  {
+    "id": "en-01",
+    "question": "What is the general rule for how legal provisions apply?",
+    "expected_articles": [1],
+    "ground_truth": "Provisions of laws govern all matters to which these provisions apply, whether in letter or in spirit."
+  },
+  {
+    "id": "en-02",
+    "question": "Can a minor without discernment validly dispose of his own property?",
+    "expected_articles": [110],
+    "ground_truth": "No - a minor without discernment has no right to dispose of his property, and all his transactions over it are void."
+  }
+]
