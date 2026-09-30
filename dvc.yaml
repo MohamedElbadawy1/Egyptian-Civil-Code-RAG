@@ -13,7 +13,11 @@ stages:
       - data/raw/egyptian_civil_code.pdf
       - src/agentic_rag/ingestion/parse_pdf.py
     outs:
-      - data/processed/civil_code_articles.json
+      # cache: false -> git tracks this file directly (it's ~1.2MB and the
+      # Docker image / CI need it), DVC only records its hash in dvc.lock.
+      # See docs/05-experiment-tracking.md for why.
+      - data/processed/civil_code_articles.json:
+          cache: false
 
   build_index:
     cmd: uv run python -m scripts.build_index --corpus data/processed/civil_code_articles.json
@@ -28,3 +32,17 @@ stages:
     # by `dvc repro` when its deps change; it just isn't a producer of a
     # DVC-tracked artifact.
     always_changed: false
+
+  evaluate:
+    cmd: uv run python -m scripts.run_evaluation
+    deps:
+      - eval/golden_qa.json
+      - src/agentic_rag/eval/run.py
+      - src/agentic_rag/eval/metrics.py
+      - src/agentic_rag/api/generation.py
+    outs:
+      - reports/evaluation_latest.csv:
+          cache: false
+    # Depends on the live Weaviate index (build_index's real output), not
+    # a local file -- not declared as a dep here for the same reason
+    # build_index has no `outs`: nothing local to hash.
