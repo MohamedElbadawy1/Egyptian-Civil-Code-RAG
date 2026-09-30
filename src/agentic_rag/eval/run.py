@@ -102,12 +102,12 @@ def _run_ragas(rows: list[dict]) -> dict[str, float]:
         ds,
         metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
     )
-    # Convert the EvaluationResult to a pandas DataFrame
+    # `.items()`/dict-style access on EvaluationResult isn't stable across
+    # ragas versions; `.to_pandas()` -> per-metric column mean is the
+    # robust way to get aggregate scores regardless of version.
     df = result.to_pandas()
-
-    # Filter for only the numeric columns (your metric scores) and calculate the mean
-    numeric_cols = df.select_dtypes(include='number').columns
-    return {col: float(df[col].mean()) for col in numeric_cols}
+    metric_names = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+    return {name: float(df[name].mean()) for name in metric_names if name in df.columns}
 
 
 def _write_report(rows: list[dict], path: Path) -> None:
