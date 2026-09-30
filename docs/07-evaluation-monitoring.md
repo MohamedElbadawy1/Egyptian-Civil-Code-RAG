@@ -1,8 +1,7 @@
 # 07 - Evaluation (RAGAS)
 
-**Status:** Code done, not yet run - needs live OpenAI + Weaviate, which
-this environment can't reach
-**Date:** 2026-09-28
+**Status:** Done - ran end-to-end against the live system, real results below
+**Date:** 2026-09-30
 
 Scoped to evaluation only for now (RAGAS). Monitoring (Langfuse) and
 guardrails from the original roadmap are deferred - see "Known issues /
@@ -72,22 +71,66 @@ uv run mlflow ui   # look for the "evaluate_golden_set" run
 ```
 
 ## Results / validation
-**Not yet run for real** - `run_evaluation()` needs a live Weaviate index
-(Step 05's `build_index`) and live OpenAI calls for both generation and
-RAGAS's LLM judge, none of which this environment can reach. What's
-validated so far:
-- `tests/test_eval_metrics.py` (6 tests) and `tests/test_golden_set.py`
-  (2 tests) passing - pure logic, no network.
-- All new modules compile cleanly; `dvc.yaml`'s new `evaluate` stage
-  parses correctly.
+`tests/test_eval_metrics.py` (6 tests) and `tests/test_golden_set.py` (2
+tests) passing - pure logic, no network. Full suite: 27/27, `ruff check`
+clean.
 
-Run `uv run python -m scripts.run_evaluation` for real and report back:
-`hit_rate`, `mean_precision`, and the four RAGAS scores, so this doc can
-be updated with actual numbers - particularly whether `hit_rate` reflects
-the 802/949-style mis-ranking documented in docs/02, now measured across
-10 questions instead of one.
+Ran `uv run python -m scripts.run_evaluation` for real against the live
+system (`top_k=5`, all 10 golden questions, RAGAS enabled):
+
+| Metric | Score |
+|---|---|
+| `hit_rate` | **0.80** (8/10) |
+| `mean_precision` | 0.16 |
+| `ragas_faithfulness` | 0.81 |
+| `ragas_answer_relevancy` | 0.83 |
+| `ragas_context_precision` | 0.90 |
+| `ragas_context_recall` | 0.90 |
+
+**Read `mean_precision` relative to its ceiling, not out of 1.0.** Every
+golden question has exactly one `expected_articles` entry, retrieved
+against `top_k=5` - the best possible `precision_at_k` per question is
+therefore `1/5 = 0.2`, not `1.0`. A score of 0.16 is ~80% of the
+achievable maximum (matches `hit_rate` closely, as expected: every hit
+scored exactly 0.2, every miss scored 0.0). Worth normalizing by the
+ceiling in a future pass so the raw number doesn't mislead anyone
+skimming this table.
+
+This is a meaningfully better picture than the single-question manual
+check in docs/02 (which found 3/5 relevant in an ad-hoc test) suggested -
+across 10 questions, retrieval hits 8/10, and RAGAS's faithfulness/
+relevancy/context scores are all in the 0.8-0.9 range.
+
+**The two misses are informative, not just failures:**
+- `cap-02` ("can a person waive their own legal capacity?", expecting
+  article 48) - article 48 never appeared in the retrieved set at all.
+  Notably, the model **did not hallucinate an answer** - it explicitly
+  said the provided articles don't contain enough information, exactly
+  the behavior the Step 03 system prompt asks for when context is
+  insufficient. A retrieval failure that doesn't become a generation
+  failure.
+- `en-01` ("what is the general rule for how legal provisions apply?",
+  expecting article 1) - article 1 never retrieved, but the articles that
+  *were* retrieved (2, 23 - rules about repeal and precedence between
+  laws) are genuinely on-topic. This looks more like a golden-set design
+  issue (article 1 is a very short, generic statement; 2/23 may be
+  equally or more defensible answers to this phrasing) than a retrieval
+  bug - worth rewording this question rather than treating it as a
+  system failure.
 
 ## Known issues / next steps
+- **Two bugs hit and fixed while first running this for real:**
+  1. `ragas` does an unconditional top-level import of `ChatVertexAI`
+     from `langchain-community`, which removed that class in `0.4.2` -
+     broke `import ragas` entirely regardless of provider used. Fixed by
+     pinning `langchain-community<0.4.2` as a dev dependency.
+  2. `_run_ragas()` originally called `.items()` on the `EvaluationResult`
+     `evaluate()` returns - not a stable API across ragas versions. Fixed
+     by using `.to_pandas()` and averaging each metric column instead.
+- **`mean_precision`'s ceiling is `1/top_k` per question** (see above) -
+  worth normalizing in a future pass.
+- `en-01`'s expected article is arguably under-specified (see above) -
+  reword or accept articles 2/23 as alternate correct answers.
 - **Monitoring (Langfuse) and guardrails are deferred, not done.** The
   original roadmap bundled them into this step; scoped this step to
   evaluation only to keep it reviewable as one change. Worth its own
