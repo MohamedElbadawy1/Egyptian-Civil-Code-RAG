@@ -31,3 +31,20 @@ jobs:
       - name: Smoke test - corpus is baked into the image
         run: |
           docker run --rm agentic-rag:ci python -c "from agentic_rag.rag.corpus import load_corpus_index; n = len(load_corpus_index()); assert n > 1000, n; print('articles in image:', n)"
+
+      # Same reasoning, for the frontend: the StaticFiles mount depends on
+      # frontend/ having been COPY'd into both Docker stages (see
+      # Dockerfile) -- a missing COPY would still build fine and only 404
+      # at request time, same failure shape as the corpus bug above.
+      - name: Smoke test - frontend is served and API routes aren't shadowed
+        run: |
+          docker run -d --rm --name agentic-rag-smoke -p 8000:8000 \
+            -e OPENAI_API_KEY=ci-smoke-test-not-called \
+            agentic-rag:ci
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:8000/health && break
+            sleep 1
+          done
+          curl -sf http://localhost:8000/health
+          curl -sf http://localhost:8000/ | grep -q "المساعد القانوني"
+          docker stop agentic-rag-smoke
