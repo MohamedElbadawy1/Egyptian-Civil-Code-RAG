@@ -18,6 +18,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 # one-time offline step run locally, not part of this image.
 COPY src/ ./src/
 COPY data/processed/ ./data/processed/
+COPY frontend/ ./frontend/
 # hatchling (our build backend) reads README.md for project metadata when
 # building the package itself -- required even though nothing at runtime
 # actually uses this file.
@@ -33,6 +34,7 @@ WORKDIR /app
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appuser /app/src /app/src
 COPY --from=builder --chown=appuser:appuser /app/data /app/data
+COPY --from=builder --chown=appuser:appuser /app/frontend /app/frontend
 COPY --chown=appuser:appuser pyproject.toml ./
 
 ENV PATH="/app/.venv/bin:$PATH" \
