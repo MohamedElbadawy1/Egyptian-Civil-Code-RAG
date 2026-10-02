@@ -21,3 +21,27 @@ def precision_at_k(retrieved: list[int], expected: list[int]) -> float:
         return 0.0
     hits = sum(1 for a in retrieved if a in expected)
     return hits / len(retrieved)
+
+
+# Simple substring heuristic, not a classifier -- good enough to catch the
+# system prompt's own phrasing (see api/generation.py's SYSTEM_PROMPT,
+# which asks the model to say so explicitly when context is insufficient)
+# but will miss paraphrased refusals and could false-positive on an answer
+# that happens to contain one of these words. Treat abstention_rate as a
+# directional signal, not a precise score -- see docs/07.
+_ABSTENTION_MARKERS = [
+    "لا تتوفر", "لا توجد معلومات", "لا يغطي", "خارج نطاق", "غير كافية",
+    "لا يحتوي", "لا تتضمن", "غير متوفرة",
+    "do not have", "does not have", "not contain", "not covered",
+    "cannot answer", "no information", "insufficient information",
+    "outside the scope", "not available in",
+]
+
+
+def contains_abstention(answer: str) -> bool:
+    """True if the answer looks like it declined to answer rather than
+    guessing -- used to score the golden set's `expect_no_answer`
+    questions (hit_at_k/precision_at_k don't apply to those: there's no
+    correct article to retrieve, the correct behavior is abstaining)."""
+    lowered = answer.lower()
+    return any(marker.lower() in lowered for marker in _ABSTENTION_MARKERS)

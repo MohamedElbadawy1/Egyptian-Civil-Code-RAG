@@ -33,26 +33,36 @@ is marked as repealed, say so explicitly rather than presenting it as \
 current law."""
 
 
+def format_article_block(a: dict) -> str:
+    """One article's context block: heading + both languages (the vector
+    match might be on either one, but the model should be able to answer
+    in whichever language the question was asked in).
+
+    Exposed separately from build_context() so callers that need one
+    block per article -- not a single joined string -- can reuse the
+    exact same formatting. eval/run.py does this: RAGAS's `contexts`
+    should mirror what the generator actually saw per article, not a
+    different (and previously buggy -- see docs/07) single-language
+    reconstruction of it.
+    """
+    heading = " - ".join(p for p in (a.get("book"), a.get("chapter"), a.get("topic")) if p)
+    header = f"Article {a['article_number']}"
+    if heading:
+        header += f" ({heading})"
+    if a.get("is_repealed"):
+        header += " [REPEALED]"
+    body_lines = []
+    if a.get("text_ar"):
+        body_lines.append(f"AR: {a['text_ar']}")
+    if a.get("text_en"):
+        body_lines.append(f"EN: {a['text_en']}")
+    return header + "\n" + "\n".join(body_lines)
+
+
 def build_context(articles: list[dict]) -> str:
     """Turn full article records (book/chapter/topic/text_ar/text_en) into
-    the context block the model sees. Includes both languages per article
-    -- the vector match might be on either one, but the model should be
-    able to answer in whichever language the question was asked in."""
-    blocks = []
-    for a in articles:
-        heading = " - ".join(p for p in (a.get("book"), a.get("chapter"), a.get("topic")) if p)
-        header = f"Article {a['article_number']}"
-        if heading:
-            header += f" ({heading})"
-        if a.get("is_repealed"):
-            header += " [REPEALED]"
-        body_lines = []
-        if a.get("text_ar"):
-            body_lines.append(f"AR: {a['text_ar']}")
-        if a.get("text_en"):
-            body_lines.append(f"EN: {a['text_en']}")
-        blocks.append(header + "\n" + "\n".join(body_lines))
-    return "\n\n".join(blocks)
+    the single joined context block the model sees."""
+    return "\n\n".join(format_article_block(a) for a in articles)
 
 
 class GenerationClient:

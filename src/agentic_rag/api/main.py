@@ -1,5 +1,6 @@
 """
-FastAPI app exposing the RAG pipeline as a single /ask endpoint.
+FastAPI app exposing the RAG pipeline as a single /ask endpoint, plus the
+static frontend (frontend/index.html) at "/".
 
 Kept thin on purpose: retrieval lives in rag/pipeline.py, generation in
 api/generation.py, article lookups in rag/corpus.py -- this module only
@@ -8,9 +9,11 @@ wires the HTTP layer around them.
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 
 from agentic_rag.api.generation import GenerationClient
 from agentic_rag.api.schemas import AskRequest, AskResponse, RetrievedArticleOut
+from agentic_rag.config import REPO_ROOT
 from agentic_rag.rag.corpus import load_corpus_index
 from agentic_rag.rag.pipeline import retrieve
 
@@ -60,3 +63,14 @@ def ask(request: AskRequest) -> AskResponse:
             for r in retrieved
         ],
     )
+
+
+# Mounted LAST and at "/" on purpose: Starlette tries routes in
+# registration order, so the explicit /health and /ask operations above
+# still match first -- this StaticFiles mount only catches whatever they
+# didn't (the frontend's index.html and any future static assets).
+# Guarded by exists() so importing this module (e.g. in tests) doesn't
+# crash in an environment where frontend/ wasn't copied in.
+_frontend_dir = REPO_ROOT / "frontend"
+if _frontend_dir.is_dir():
+    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")

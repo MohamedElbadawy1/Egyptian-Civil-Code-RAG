@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>المساعد القانوني - القانون المدني المصري</title>
+<style>
+  :root {
+    --primary: #0f3d3e;
+    --primary-light: #1a5c5a;
+    --bg: #f4f7f6;
+    --card: #ffffff;
+    --border: #d9e4e2;
+    --text: #1a1a1a;
+    --muted: #666;
+    --danger: #a13a2f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    direction: rtl;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+    max-width: 640px;
+  }
+  header h1 {
+    color: var(--primary);
+    font-size: 1.6rem;
+    margin-bottom: 4px;
+  }
+  header p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    width: 100%;
+    max-width: 640px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  textarea {
+    width: 100%;
+    min-height: 70px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    resize: vertical;
+    direction: rtl;
+  }
+  textarea:focus { outline: 2px solid var(--primary-light); border-color: transparent; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; }
+  select {
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: white;
+  }
+  button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { background: var(--primary-light); }
+  button:disabled { background: #9db3b2; cursor: not-allowed; }
+  .result { margin-top: 20px; display: none; }
+  .answer-box {
+    background: #eef6f5;
+    border-right: 4px solid var(--primary);
+    border-radius: 6px;
+    padding: 14px 16px;
+    line-height: 1.9;
+    white-space: pre-wrap;
+  }
+  .articles { margin-top: 14px; }
+  .articles h3 { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+  .article-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    margin: 0 4px 6px 0;
+    font-size: 0.82rem;
+  }
+  .article-chip .num { font-weight: 700; color: var(--primary); }
+  .article-chip .score { color: var(--muted); direction: ltr; unicode-bidi: embed; }
+  .article-chip.repealed { border-color: var(--danger); color: var(--danger); }
+  .loading { text-align: center; color: var(--muted); margin-top: 16px; display: none; }
+  .error { color: var(--danger); background: #fdecea; border-radius: 6px; padding: 10px 14px; margin-top: 16px; display: none; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 0.78rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>المساعد القانوني للقانون المدني المصري</h1>
+  <p>اسأل بالعربي أو الإنجليزي — الإجابة مبنية على نص القانون مباشرة مع ذكر رقم المادة</p>
+</header>
+
+<div class="card">
+  <textarea id="question" placeholder="مثال: ما حكم تصرفات الصغير غير المميز في ماله؟"></textarea>
+  <div class="row">
+    <select id="topk">
+      <option value="3">3 مواد</option>
+      <option value="5" selected>5 مواد</option>
+      <option value="8">8 مواد</option>
+    </select>
+    <button id="ask-btn" onclick="askQuestion()">اسأل</button>
+  </div>
+
+  <div class="loading" id="loading">جارٍ البحث في القانون...</div>
+  <div class="error" id="error"></div>
+
+  <div class="result" id="result">
+    <div class="answer-box" id="answer"></div>
+    <div class="articles">
+      <h3>المواد المستشهد بها</h3>
+      <div id="article-list"></div>
+    </div>
+  </div>
+</div>
+
+<footer>Egyptian Civil Code RAG &middot; للأغراض التعليمية فقط، لا يغني عن استشارة محامٍ</footer>
+
+<script>
+async function askQuestion() {
+  const question = document.getElementById('question').value.trim();
+  const topK = document.getElementById('topk').value;
+  const btn = document.getElementById('ask-btn');
+  const loading = document.getElementById('loading');
+  const errorBox = document.getElementById('error');
+  const result = document.getElementById('result');
+
+  errorBox.style.display = 'none';
+  result.style.display = 'none';
+
+  if (question.length < 3) {
+    errorBox.textContent = 'اكتب سؤال بثلاثة أحرف على الأقل.';
+    errorBox.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  loading.style.display = 'block';
+
+  try {
+    const resp = await fetch('/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question, top_k: parseInt(topK, 10) })
+    });
+
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.detail || `خطأ من الخادم (${resp.status})`);
+    }
+
+    const data = await resp.json();
+    document.getElementById('answer').textContent = data.answer;
+
+    const list = document.getElementById('article-list');
+    list.innerHTML = '';
+    data.articles.forEach(a => {
+      const chip = document.createElement('span');
+      chip.className = 'article-chip' + (a.is_repealed ? ' repealed' : '');
+      chip.innerHTML = `<span class="num">مادة ${a.article_number}</span>` +
+        (a.is_repealed ? ' (ملغاة)' : '') +
+        `<span class="score">${a.score.toFixed(2)}</span>`;
+      list.appendChild(chip);
+    });
+
+    result.style.display = 'block';
+  } catch (err) {
+    errorBox.textContent = 'تعذّر الحصول على إجابة: ' + err.message;
+    errorBox.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    loading.style.display = 'none';
+  }
+}
+
+document.getElementById('question').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    askQuestion();
+  }
+});
+</script>
+
+</body>
+</html>
