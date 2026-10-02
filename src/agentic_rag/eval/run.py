@@ -15,10 +15,10 @@ from pathlib import Path
 
 import mlflow
 
-from agentic_rag.api.generation import GenerationClient
+from agentic_rag.api.generation import GenerationClient, format_article_block
 from agentic_rag.config import REPO_ROOT
 from agentic_rag.eval.golden_set import GoldenExample, load_golden_set
-from agentic_rag.eval.metrics import hit_at_k, precision_at_k
+from agentic_rag.eval.metrics import contains_abstention, hit_at_k, precision_at_k
 from agentic_rag.rag.corpus import load_corpus_index
 from agentic_rag.rag.pipeline import retrieve
 
@@ -41,9 +41,16 @@ def run_evaluation(
         retrieved_numbers = [r.article_number for r in retrieved]
         full_articles = [corpus_index[n] for n in retrieved_numbers if n in corpus_index]
         answer = gen_client.answer(ex.question, full_articles)
-        # RAGAS wants one context string per retrieved chunk; fall back to
-        # whichever language a given article actually has text in.
-        contexts = [a.get("text_ar") or a.get("text_en") or "" for a in full_articles]
+        # One context string per retrieved article, formatted exactly the
+        # way GenerationClient.answer() formatted it for the LLM (both
+        # languages included). Previously this picked text_ar OR text_en
+        # with a plain `or`, which -- since every article has Arabic text
+        # -- always picked Arabic even for English questions (en-01,
+        # en-02), silently evaluating faithfulness/context metrics against
+        # context the generator didn't actually see in isolation. Reusing
+        # format_article_block() keeps this honest to what was generated
+        # from, regardless of question language. See docs/07.
+        contexts = [format_article_block(a) for a in full_articles]
 
         rows.append({
             "id": ex.id,
@@ -53,12 +60,21 @@ def run_evaluation(
             "ground_truth": ex.ground_truth,
             "retrieved_articles": retrieved_numbers,
             "expected_articles": ex.expected_articles,
-            "hit": hit_at_k(retrieved_numbers, ex.expected_articles),
-            "precision": precision_at_k(retrieved_numbers, ex.expected_articles),
+            "expect_no_answer": ex.expect_no_answer,
+            # hit/precision are meaningless for expect_no_answer questions
+            # (there's no correct article -- the correct behavior is
+            # abstaining, scored separately as abstention_rate below).
+            "hit": None if ex.expect_no_answer else hit_at_k(retrieved_numbers, ex.expected_articles),
+            "precision": None if ex.expect_no_answer else precision_at_k(retrieved_numbers, ex.expected_articles),
+            "abstained": contains_abstention(answer) if ex.expect_no_answer else None,
         })
 
-    hit_rate = sum(r["hit"] for r in rows) / len(rows)
-    mean_precision = sum(r["precision"] for r in rows) / len(rows)
+    retrieval_rows = [r for r in rows if not r["expect_no_answer"]]
+    abstention_rows = [r for r in rows if r["expect_no_answer"]]
+
+    hit_rate = sum(r["hit"] for r in retrieval_rows) / len(retrieval_rows) if retrieval_rows else None
+    mean_precision = sum(r["precision"] for r in retrieval_rows) / len(retrieval_rows) if retrieval_rows else None
+    abstention_rate = sum(r["abstained"] for r in abstention_rows) / len(abstention_rows) if abstention_rows else None
 
     ragas_scores: dict[str, float] = {}
     if run_ragas:
@@ -68,10 +84,16 @@ def run_evaluation(
 
     with mlflow.start_run(run_name="evaluate_golden_set"):
         mlflow.log_param("golden_set_size", len(examples))
+        mlflow.log_param("retrieval_question_count", len(retrieval_rows))
+        mlflow.log_param("no_answer_question_count", len(abstention_rows))
         mlflow.log_param("top_k", top_k)
         mlflow.log_param("ragas_enabled", run_ragas)
-        mlflow.log_metric("hit_rate", hit_rate)
-        mlflow.log_metric("mean_precision", mean_precision)
+        if hit_rate is not None:
+            mlflow.log_metric("hit_rate", hit_rate)
+        if mean_precision is not None:
+            mlflow.log_metric("mean_precision", mean_precision)
+        if abstention_rate is not None:
+            mlflow.log_metric("abstention_rate", abstention_rate)
         for name, value in ragas_scores.items():
             mlflow.log_metric(f"ragas_{name}", value)
         mlflow.log_artifact(str(report_path))
@@ -112,7 +134,10 @@ def _run_ragas(rows: list[dict]) -> dict[str, float]:
 
 def _write_report(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["id", "question", "hit", "precision", "retrieved_articles", "expected_articles", "answer"]
+    fieldnames = [
+        "id", "question", "expect_no_answer", "hit", "precision", "abstained",
+        "retrieved_articles", "expected_articles", "answer",
+    ]
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
