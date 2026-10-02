@@ -1,19 +1,32 @@
 # 07 - Evaluation (RAGAS)
 
-**Status:** Done - ran end-to-end against the live system, real results below
-**Date:** 2026-09-30
+**Status:** Done - golden set expanded to 40 questions, a real context-language
+bug fixed, not yet re-run against the live system with the expanded set
+**Date:** 2026-10-01 (expanded from the original 10-question version - see below)
 
 Scoped to evaluation only for now (RAGAS). Monitoring (Langfuse) and
 guardrails from the original roadmap are deferred - see "Known issues /
 next steps".
 
 ## What we built
-- `eval/golden_qa.json` - a 10-question golden set (8 Arabic, 2 English)
-  with `expected_articles` and a `ground_truth` answer per question.
-  Grounded directly in article text we'd already read while debugging
-  retrieval in docs/02 and docs/03 (articles 1, 6, 48, 110, 118, 802,
-  806, 848, 949) - not sourced from a lawyer. Good enough to catch
-  regressions; not a substitute for legal review.
+- `eval/golden_qa.json` - **40 questions** (grown from an initial 10),
+  grounded in article text read directly from the real corpus (verified
+  with a script, not assumed) - covering direct questions, paraphrased
+  restatements, realistic scenarios, multi-hop questions needing more
+  than one article (e.g. "does property transfer on contract alone or
+  does it need registration, and what must the seller do?" -> articles
+  932, 934, 428), English questions, and two deliberately out-of-scope
+  questions (criminal law, immigration law) that should make the system
+  abstain rather than hallucinate. Not sourced from a lawyer - good
+  enough to catch regressions, not a substitute for legal review.
+- `GoldenExample.expect_no_answer` (default `False`) flags the
+  out-of-scope questions - `eval/run.py` scores these separately (see
+  below) instead of against `hit_at_k`/`precision_at_k`, which don't make
+  sense when there's no correct article to retrieve.
+- `metrics.contains_abstention()` - a substring-heuristic check for
+  whether an answer looks like a refusal (matches the system prompt's own
+  "say so explicitly" phrasing from Step 03) rather than a guess. Not a
+  classifier, a directional signal - see its docstring.
 - `src/agentic_rag/eval/golden_set.py` - loads/validates the golden set.
 - `src/agentic_rag/eval/metrics.py` - `hit_at_k` / `precision_at_k`:
   deterministic retrieval metrics, no LLM judge needed. The quantified,
@@ -38,11 +51,36 @@ next steps".
   the context, is it relevant to the question) that set-overlap alone
   can't capture. Both get logged so a hit-rate regression and a
   faithfulness regression are both visible, not just one or the other.
-- **Golden set grounded in article text we'd actually read**, not
-  invented from general legal knowledge - every `ground_truth` traces
-  back to text seen verbatim earlier in this project (docs/02's manual
-  retrieval check, docs/03's `/ask` test). Keeps the eval set honest
-  about what it's actually testing.
+- **Golden set grounded in article text actually read from the corpus**
+  (verified with a script each time, not assumed or taken on faith from
+  an AI's claim) - not invented from general legal knowledge. Keeps the
+  eval set honest about what it's actually testing.
+- **Expanded 10 -> 40 questions, across six question types** (direct,
+  paraphrased, scenario-based, multi-hop/multi-article, English,
+  deliberately-out-of-scope) after a third-party review of the repo
+  pointed out the original 10 were narrow (mostly single-hop, direct
+  phrasing). The multi-hop questions in particular are only meaningful
+  because they're grounded in real cross-references in the corpus - e.g.
+  `multihop-01` needs articles 932 (ownership transfers by contract),
+  934 (immovable property specifically needs registration), and 428
+  (seller's obligation to effect the transfer) together, verified against
+  the actual corpus text rather than assumed from the question design.
+- **`expect_no_answer` questions scored separately, not folded into
+  `hit_at_k`.** There's no "correct article" for a criminal-law or
+  immigration-law question against the Civil Code - the correct system
+  behavior is abstaining, which `contains_abstention()`'s substring check
+  scores as `abstention_rate` instead.
+- **Fixed a real bug a third-party review caught**: `eval/run.py` built
+  RAGAS's `contexts` with `a.get("text_ar") or a.get("text_en") or ""` -
+  since every article has Arabic text, this *always* picked Arabic, even
+  for the English golden questions (`en-01`, `en-02`), so RAGAS was
+  silently judging faithfulness/context metrics for English answers
+  against Arabic-only context. Fixed by reusing
+  `generation.format_article_block()` (both languages, exactly what the
+  generator actually saw) instead of re-deriving a different, buggy
+  single-language context independently. Verified the fix with a test
+  asserting the eval context and the generation context are built
+  identically (`tests/test_generation.py`).
 - **RAGAS import is lazy** (inside `_run_ragas`, not at module top level)
   so `eval/run.py` and `eval/metrics.py` stay importable - and testable -
   without `ragas`/`datasets` installed. Only `scripts/run_evaluation.py`
@@ -71,12 +109,22 @@ uv run mlflow ui   # look for the "evaluate_golden_set" run
 ```
 
 ## Results / validation
-`tests/test_eval_metrics.py` (6 tests) and `tests/test_golden_set.py` (2
-tests) passing - pure logic, no network. Full suite: 27/27, `ruff check`
+`tests/test_eval_metrics.py` (9 tests) and `tests/test_golden_set.py` (5
+tests) passing - pure logic, no network. Full suite: 37/37, `ruff check`
 clean.
 
-Ran `uv run python -m scripts.run_evaluation` for real against the live
-system (`top_k=5`, all 10 golden questions, RAGAS enabled):
+**Not yet re-run against the live system with the expanded 40-question
+set or the context-bug fix.** The results below are from the original
+10-question version, before both the expansion and the bug fix - kept
+here as a historical baseline, not the current state. Run
+`uv run python -m scripts.run_evaluation` for real and report back the
+new `hit_rate`, `mean_precision`, `abstention_rate`, and RAGAS scores so
+this doc can be updated with current numbers.
+
+### Original 10-question results (superseded - see above)
+Ran for real against the live system (`top_k=5`, all 10 golden questions,
+RAGAS enabled), before the golden set was expanded and before the
+contexts bug was fixed:
 
 | Metric | Score |
 |---|---|
@@ -119,7 +167,7 @@ relevancy/context scores are all in the 0.8-0.9 range.
   system failure.
 
 ## Known issues / next steps
-- **Two bugs hit and fixed while first running this for real:**
+- **Three bugs hit and fixed so far:**
   1. `ragas` does an unconditional top-level import of `ChatVertexAI`
      from `langchain-community`, which removed that class in `0.4.2` -
      broke `import ragas` entirely regardless of provider used. Fixed by
@@ -127,23 +175,32 @@ relevancy/context scores are all in the 0.8-0.9 range.
   2. `_run_ragas()` originally called `.items()` on the `EvaluationResult`
      `evaluate()` returns - not a stable API across ragas versions. Fixed
      by using `.to_pandas()` and averaging each metric column instead.
-- **`mean_precision`'s ceiling is `1/top_k` per question** (see above) -
-  worth normalizing in a future pass.
-- `en-01`'s expected article is arguably under-specified (see above) -
-  reword or accept articles 2/23 as alternate correct answers.
-- **Monitoring (Langfuse) and guardrails are deferred, not done.** The
-  original roadmap bundled them into this step; scoped this step to
-  evaluation only to keep it reviewable as one change. Worth its own
-  step once there's a sense of what evaluation actually reveals.
-- Only 10 questions in the golden set, all single-hop (one clearly
-  correct article per question) - doesn't yet cover multi-article
-  questions, deliberately out-of-scope questions (testing that the
-  system says "I don't know" rather than hallucinating), or repealed-
-  article edge cases.
+  3. RAGAS `contexts` silently defaulted to Arabic-only even for English
+     questions (see "Why" above) - fixed by reusing
+     `format_article_block()` from `api/generation.py`.
+- **`mean_precision`'s ceiling is `1/top_k` per question** (see the
+  original-results section above) - worth normalizing in a future pass.
+- `en-01`'s expected article is arguably under-specified (article 1 is a
+  short, generic statement; articles 2/23 may be equally defensible) -
+  reword or accept them as alternate correct answers once re-run.
+- `contains_abstention()` is a substring heuristic, not a classifier -
+  will miss paraphrased refusals and could false-positive. Treat
+  `abstention_rate` as directional, not precise.
 - `context_recall` needs a `ground_truth` that's genuinely derivable from
   the retrieved contexts - our short one-sentence ground truths may
   score lower than a more complete reference answer would, independent
   of actual retrieval quality. Worth revisiting once real scores are in.
+- **Monitoring (Langfuse) and guardrails are deferred, not done.** The
+  original roadmap bundled them into this step; scoped this step to
+  evaluation only to keep it reviewable as one change. Worth its own
+  step once there's a sense of what evaluation actually reveals.
 - No CI integration yet (running RAGAS costs real OpenAI credits per
   push, so this isn't wired into `ci.yml` the way `pytest`/`ruff` are) -
   intentionally a manual/scheduled step for now.
+- A third-party review also suggested hybrid (BM25 + vector) search,
+  a reranking pass, and query decomposition for multi-hop questions.
+  Deliberately not doing these yet - the point of expanding the golden
+  set now is to get a real signal across 40 questions first, rather than
+  architecting against two failures out of ten. Weaviate (already in use)
+  supports hybrid search natively if the expanded results show it's
+  actually needed - no new search engine required.
