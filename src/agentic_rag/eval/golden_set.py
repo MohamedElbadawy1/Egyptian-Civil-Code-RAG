@@ -24,6 +24,11 @@ class GoldenExample:
     question: str
     expected_articles: list[int]
     ground_truth: str
+    # True for questions deliberately outside the Civil Code (e.g.
+    # criminal/immigration law) -- the "correct" behavior is abstaining,
+    # not retrieving a specific article, so these are scored differently
+    # (abstention_rate, not hit_at_k/precision_at_k) in eval/run.py.
+    expect_no_answer: bool = False
 
 
 def load_golden_set(path: Path | None = None) -> list[GoldenExample]:
@@ -35,6 +40,7 @@ def load_golden_set(path: Path | None = None) -> list[GoldenExample]:
             question=item["question"],
             expected_articles=item["expected_articles"],
             ground_truth=item["ground_truth"],
+            expect_no_answer=item.get("expect_no_answer", False),
         )
         for item in raw
     ]
