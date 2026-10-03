@@ -1,8 +1,8 @@
 # 07 - Evaluation (RAGAS)
 
-**Status:** Done - golden set expanded to 40 questions, a real context-language
-bug fixed, not yet re-run against the live system with the expanded set
-**Date:** 2026-10-01 (expanded from the original 10-question version - see below)
+**Status:** Done - 40-question golden set run end-to-end against the live
+system, real results below, two new findings worth acting on
+**Date:** 2026-10-02
 
 Scoped to evaluation only for now (RAGAS). Monitoring (Langfuse) and
 guardrails from the original roadmap are deferred - see "Known issues /
@@ -113,15 +113,55 @@ uv run mlflow ui   # look for the "evaluate_golden_set" run
 tests) passing - pure logic, no network. Full suite: 37/37, `ruff check`
 clean.
 
-**Not yet re-run against the live system with the expanded 40-question
-set or the context-bug fix.** The results below are from the original
-10-question version, before both the expansion and the bug fix - kept
-here as a historical baseline, not the current state. Run
-`uv run python -m scripts.run_evaluation` for real and report back the
-new `hit_rate`, `mean_precision`, `abstention_rate`, and RAGAS scores so
-this doc can be updated with current numbers.
+### 40-question results (current)
+Ran `uv run python -m scripts.run_evaluation` for real against the live
+system (`top_k=5`, all 40 golden questions, RAGAS enabled):
 
-### Original 10-question results (superseded - see above)
+| Metric | Score | vs. 10-question baseline |
+|---|---|---|
+| `hit_rate` | **0.79** (30/38 retrieval questions) | 0.80 - essentially held up |
+| `mean_precision` | 0.158 | 0.16 - essentially unchanged |
+| `abstention_rate` | **1.00** (2/2) | n/a - new metric |
+| `ragas_faithfulness` | **0.96** | 0.81 - notably higher, likely thanks to the context-bug fix making the judged context actually match what the generator saw |
+| `ragas_answer_relevancy` | 0.71 | 0.83 - lower, expected: the 40-question set includes scenarios/paraphrases/multi-hop questions that are harder to answer cleanly than the original mostly-direct 10 |
+| `ragas_context_precision` | 0.88 | 0.90 - close |
+| `ragas_context_recall` | 0.90 | 0.90 - unchanged |
+
+`hit_rate` and `mean_precision` held up well across 4x more questions and
+6 question types, which is a meaningfully stronger signal than the
+original 10 gave - this looks like a real, stable number rather than an
+artifact of a small or easy sample. `abstention_rate = 1.0` is a genuinely
+good result: both deliberately-out-of-scope questions (a criminal-law
+question, an immigration question) got an explicit refusal instead of a
+hallucinated answer.
+
+**Two new findings from the larger set, both more actionable than
+anything the original 10 surfaced:**
+
+1. **Paraphrase inconsistency - the same legal question, worded two
+   ways, got contradictory answers.** `contract-02`
+   ("هل يجوز التعامل في تركة شخص لا يزال على قيد الحياة؟") correctly
+   hedged: "لا يمكن الجزم ... لا توجد معلومات كافية". Its paraphrase,
+   `contract-05-paraphrase` ("هل يصح التعامل في ميراث شخص لا يزال
+   حيًا؟" - same question, different wording), confidently answered
+   "نعم يجوز", reasoning from retrieved articles (916, 917 - about
+   death-bed gifts treated as bequests) that don't actually answer the
+   question asked. This isn't a retrieval ranking problem so much as an
+   **inconsistency** problem: the correct behavior (abstain, as
+   `contract-02` did) depends on which of two near-identical phrasings
+   was used. Worth a dedicated regression test once this is looked at
+   further - `tests/test_golden_set.py` already keeps both IDs so this
+   pair stays easy to spot in future report diffs.
+2. **`multihop-01` missed all three expected articles.** The question
+   needing articles 932, 934, and 428 together retrieved none of
+   them - instead articles like 204 and 418 (genuinely related, but not
+   the ones the golden set expects) came back. Either retrieval
+   genuinely struggles with compound/multi-hop questions more than
+   single-fact ones, or this specific golden question is phrased in a
+   way that pulls toward adjacent-but-different articles. Worth checking
+   after a few more multi-hop examples before concluding which.
+
+### Original 10-question results (superseded, kept for history)
 Ran for real against the live system (`top_k=5`, all 10 golden questions,
 RAGAS enabled), before the golden set was expanded and before the
 contexts bug was fixed:
@@ -199,8 +239,16 @@ relevancy/context scores are all in the 0.8-0.9 range.
   intentionally a manual/scheduled step for now.
 - A third-party review also suggested hybrid (BM25 + vector) search,
   a reranking pass, and query decomposition for multi-hop questions.
-  Deliberately not doing these yet - the point of expanding the golden
-  set now is to get a real signal across 40 questions first, rather than
-  architecting against two failures out of ten. Weaviate (already in use)
-  supports hybrid search natively if the expanded results show it's
-  actually needed - no new search engine required.
+  With the 40-question results in hand, `hit_rate`/`mean_precision`
+  holding steady suggests retrieval itself isn't badly broken - but the
+  paraphrase-inconsistency and multihop-01 findings above are concrete
+  enough to act on now rather than needing another evaluation round
+  first. Weaviate (already in use) supports hybrid search natively if
+  this turns out to be a retrieval problem rather than a generation
+  consistency problem - no new search engine required.
+- **Next concrete step:** investigate the `contract-02` /
+  `contract-05-paraphrase` inconsistency specifically - check whether
+  the two questions' embeddings actually retrieve different articles
+  (a retrieval problem) or retrieve the same ones but the model
+  reasons about them differently (a generation/prompt problem). That
+  distinguishes which half of the pipeline to fix.
