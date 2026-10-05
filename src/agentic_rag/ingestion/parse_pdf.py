@@ -79,7 +79,11 @@ REPEALED_SINGLE_RE = re.compile(r'^Article\s+(\d+)\s+repealed', re.IGNORECASE)
 BOOK_RE = re.compile(r'^BOOK\s+([IVXLCDM]+)\.?\s*$', re.IGNORECASE)
 CHAPTER_RE = re.compile(r'^Chapter\s+([IVXLCDM]+)\b\.?\s*(.*)$', re.IGNORECASE)
 SECTION_RE = re.compile(r'^Section\s+([IVXLCDM]+)\b\.?\s*(.*)$', re.IGNORECASE)
-TOPIC_RE = re.compile(r'^(\d+)\.\s+([A-Za-z].*)$')
+TOPIC_RE = re.compile(r'^(\d+)[.\-]\s+([A-Za-z].*)$')
+# Deliberately narrow: only tried on the single line right after a
+# TOPIC_RE match (see just_saw_topic below), so it doesn't risk matching
+# an article's own opening sentence elsewhere.
+TOPIC_CONTINUATION_RE = re.compile(r"^[A-Z][A-Za-z ,'\-]{2,60}:?$")
 
 
 def parse(layout_text_path: Path) -> list[dict]:
@@ -90,6 +94,13 @@ def parse(layout_text_path: Path) -> list[dict]:
     current: dict | None = None
     repealed_set: set[int] = set()
     heading_stack = {'book': None, 'chapter': None, 'section': None, 'topic': None}
+    # True right after a numbered topic line -- about 14 topics in the
+    # source PDF span two lines (a numbered title plus an unnumbered
+    # sub-title, e.g. "2. The Application of Laws" / "Conflicts of law as
+    # to time:"). Without this, the second line falls through and leaks
+    # into whatever article follows, the same class of bug as the
+    # dash-vs-period topic fix above.
+    just_saw_topic = False
 
     def flush():
         nonlocal current
@@ -104,6 +115,17 @@ def parse(layout_text_path: Path) -> list[dict]:
         if not line.strip():
             continue
         en, ar = split_line(line)
+
+        # Only tried on the one line immediately following a numbered
+        # topic match (see just_saw_topic's docstring above). Consumed
+        # and appended to the topic if it looks like a title; otherwise
+        # the flag is cleared and this line falls through to the normal
+        # checks below in this same iteration.
+        if just_saw_topic:
+            just_saw_topic = False
+            if TOPIC_CONTINUATION_RE.match(en):
+                heading_stack['topic'] = f"{heading_stack['topic']} - {en.rstrip(':')}"
+                continue
 
         # Heading lines are recognized (and consumed via `continue`)
         # *before* the repeal-marker check or the article-body append
@@ -140,6 +162,7 @@ def parse(layout_text_path: Path) -> list[dict]:
         m_topic = TOPIC_RE.match(en)
         if m_topic:
             heading_stack['topic'] = m_topic.group(2).strip()
+            just_saw_topic = True
             continue
 
         m_range = REPEALED_RANGE_RE.search(en)

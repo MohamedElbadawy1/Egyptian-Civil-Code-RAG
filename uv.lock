@@ -21,10 +21,12 @@ name = "agentic-rag"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "datasets" },
     { name = "fastapi" },
     { name = "mlflow" },
     { name = "openai" },
     { name = "python-dotenv" },
+    { name = "ragas" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "weaviate-client" },
 ]
@@ -43,6 +45,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
+    { name = "datasets", specifier = ">=5.0.1" },
     { name = "datasets", marker = "extra == 'dev'", specifier = ">=2.20" },
     { name = "dvc", marker = "extra == 'dev'" },
     { name = "fastapi", specifier = ">=0.115" },
@@ -51,6 +54,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.40" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "ragas", specifier = ">=0.3.1" },
     { name = "ragas", marker = "extra == 'dev'", specifier = ">=0.2" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },

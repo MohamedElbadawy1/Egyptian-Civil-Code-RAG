@@ -13,21 +13,21 @@ stages:
       size: 2599703
     - path: src/agentic_rag/ingestion/parse_pdf.py
       hash: md5
-      md5: 6e5c0b5353f7b2ee8514cdee627470ab
-      size: 8766
+      md5: cd9d3d7614c4b1bb2b76e591e2413fd7
+      size: 9809
     outs:
     - path: data/processed/civil_code_articles.json
       hash: md5
-      md5: cdcf4739aa9adf4fee563bb4b12fe4a0
-      size: 1198001
+      md5: 853ac98c22138ceed78df3c3030fe5cc
+      size: 1213819
   build_index:
     cmd: uv run python -m scripts.build_index --corpus 
       data/processed/civil_code_articles.json
     deps:
     - path: data/processed/civil_code_articles.json
       hash: md5
-      md5: cdcf4739aa9adf4fee563bb4b12fe4a0
-      size: 1198001
+      md5: 853ac98c22138ceed78df3c3030fe5cc
+      size: 1213819
     - path: src/agentic_rag/rag/chunking.py
       hash: md5
       md5: 1ddfe5a74d2aeb2d592ded61067e9433
