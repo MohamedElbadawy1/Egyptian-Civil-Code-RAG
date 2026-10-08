@@ -58,10 +58,26 @@ def index_corpus(processed_json_path: Path, embedding_client: OpenAIEmbeddingCli
     return len(chunks)
 
 
-def retrieve(query: str, top_k: int = 5, embedding_client: OpenAIEmbeddingClient | None = None) -> list[RetrievedArticle]:
+def retrieve(
+    query: str,
+    top_k: int = 5,
+    embedding_client: OpenAIEmbeddingClient | None = None,
+    use_hybrid: bool = False,
+    alpha: float = 0.5,
+) -> list[RetrievedArticle]:
     """Embed a user query and return the top-k matching articles, deduped
-    across the Arabic/English vector pair for each article."""
+    across the Arabic/English vector pair for each article.
+
+    use_hybrid switches from pure vector search (near_vector) to
+    Weaviate's native hybrid search (BM25 + vector fusion), kept as an
+    explicit flag so the before/after eval comparison in
+    docs/09-hybrid-search.md can call both from the same code path.
+    """
     client = embedding_client or OpenAIEmbeddingClient()
     query_vector = client.embed_query(query)
     with vectorstore.connect() as weaviate_client:
+        if use_hybrid:
+            return vectorstore.hybrid_search(
+                weaviate_client, query, query_vector, top_k=top_k, alpha=alpha
+            )
         return vectorstore.search(weaviate_client, query_vector, top_k=top_k)

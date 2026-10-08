@@ -117,3 +117,41 @@ def search(client: weaviate.WeaviateClient, query_vector: list[float], top_k: in
                 score=score,
             )
     return sorted(best.values(), key=lambda r: r.score, reverse=True)[:top_k]
+
+
+def hybrid_search(
+    client: weaviate.WeaviateClient,
+    query_text: str,
+    query_vector: list[float],
+    top_k: int = 5,
+    alpha: float = 0.5,
+) -> list[RetrievedArticle]:
+    """Hybrid search combining BM25 (keyword) and vector similarity via
+    Weaviate's native fusion, instead of a separate BM25 engine bolted on
+    the side. Mirrors search()'s over-fetch + cross-language dedupe logic
+    so retrieve() can swap between the two with no caller-side changes.
+
+    alpha: 0.0 = pure BM25 (keyword only), 1.0 = pure vector search.
+    0.5 is a balanced default -- see docs/09-hybrid-search.md for the
+    before/after eval numbers used to tune it.
+    """
+    collection = client.collections.get(COLLECTION_NAME)
+    results = collection.query.hybrid(
+        query=query_text,
+        vector=query_vector,
+        alpha=alpha,
+        limit=top_k * 2,  # over-fetch: both languages compete for the same articles
+        return_metadata=["score"],
+    )
+    best: dict[int, RetrievedArticle] = {}
+    for obj in results.objects:
+        num = obj.properties["article_number"]
+        score = obj.metadata.score
+        if num not in best or score > best[num].score:
+            best[num] = RetrievedArticle(
+                article_number=num,
+                citation=obj.properties["citation"],
+                is_repealed=obj.properties["is_repealed"],
+                score=score,
+            )
+    return sorted(best.values(), key=lambda r: r.score, reverse=True)[:top_k]

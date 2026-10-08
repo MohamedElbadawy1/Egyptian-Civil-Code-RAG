@@ -30,6 +30,8 @@ def run_evaluation(
     top_k: int = 5,
     run_ragas: bool = True,
     report_path: Path = DEFAULT_REPORT_PATH,
+    use_hybrid: bool = False,
+    alpha: float = 0.5,
 ) -> Path:
     examples = golden_set or load_golden_set()
     corpus_index = load_corpus_index()
@@ -37,7 +39,7 @@ def run_evaluation(
 
     rows = []
     for ex in examples:
-        retrieved = retrieve(ex.question, top_k=top_k)
+        retrieved = retrieve(ex.question, top_k=top_k, use_hybrid=use_hybrid, alpha=alpha)
         retrieved_numbers = [r.article_number for r in retrieved]
         full_articles = [corpus_index[n] for n in retrieved_numbers if n in corpus_index]
         answer = gen_client.answer(ex.question, full_articles)
@@ -88,6 +90,8 @@ def run_evaluation(
         mlflow.log_param("no_answer_question_count", len(abstention_rows))
         mlflow.log_param("top_k", top_k)
         mlflow.log_param("ragas_enabled", run_ragas)
+        mlflow.log_param("use_hybrid", use_hybrid)
+        mlflow.log_param("alpha", alpha if use_hybrid else None)
         if hit_rate is not None:
             mlflow.log_metric("hit_rate", hit_rate)
         if mean_precision is not None:
