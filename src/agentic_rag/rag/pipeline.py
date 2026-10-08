@@ -58,10 +58,32 @@ def index_corpus(processed_json_path: Path, embedding_client: OpenAIEmbeddingCli
     return len(chunks)
 
 
-def retrieve(query: str, top_k: int = 5, embedding_client: OpenAIEmbeddingClient | None = None) -> list[RetrievedArticle]:
+from agentic_rag.rag.query_expansion import expand_query
+
+
+def retrieve(
+    query: str,
+    top_k: int = 5,
+    embedding_client: OpenAIEmbeddingClient | None = None,
+    use_hybrid: bool = False,
+    alpha: float = 0.5,
+    expand: bool = False,
+) -> list[RetrievedArticle]:
     """Embed a user query and return the top-k matching articles, deduped
-    across the Arabic/English vector pair for each article."""
+    across the Arabic/English vector pair for each article.
+
+    expand=True rewrites the query through expand_query() first, adding
+    formal legal terminology (e.g. "الشهر العقاري" alongside "تسجيل") so
+    BM25 and the embedding both have the Code's actual vocabulary to
+    match against -- see docs/10-query-expansion.md for why hybrid
+    search alone couldn't close this specific gap.
+    """
+    search_query = expand_query(query) if expand else query
     client = embedding_client or OpenAIEmbeddingClient()
-    query_vector = client.embed_query(query)
+    query_vector = client.embed_query(search_query)
     with vectorstore.connect() as weaviate_client:
+        if use_hybrid:
+            return vectorstore.hybrid_search(
+                weaviate_client, search_query, query_vector, top_k=top_k, alpha=alpha
+            )
         return vectorstore.search(weaviate_client, query_vector, top_k=top_k)
