@@ -18,7 +18,11 @@ import mlflow
 from agentic_rag.api.generation import GenerationClient, format_article_block
 from agentic_rag.config import REPO_ROOT
 from agentic_rag.eval.golden_set import GoldenExample, load_golden_set
-from agentic_rag.eval.metrics import contains_abstention, hit_at_k, precision_at_k, contains_abstention_llm
+from agentic_rag.eval.metrics import (
+    contains_abstention_llm,
+    hit_at_k,
+    precision_at_k,
+)
 from agentic_rag.rag.corpus import load_corpus_index
 from agentic_rag.rag.pipeline import retrieve
 
@@ -30,6 +34,9 @@ def run_evaluation(
     top_k: int = 5,
     run_ragas: bool = True,
     report_path: Path = DEFAULT_REPORT_PATH,
+    use_hybrid: bool = False,
+    alpha: float = 0.5,
+    expand: bool = False,
 ) -> Path:
     examples = golden_set or load_golden_set()
     corpus_index = load_corpus_index()
@@ -37,7 +44,7 @@ def run_evaluation(
 
     rows = []
     for ex in examples:
-        retrieved = retrieve(ex.question, top_k=top_k)
+        retrieved = retrieve(ex.question, top_k=top_k, use_hybrid=use_hybrid, alpha=alpha, expand=expand)
         retrieved_numbers = [r.article_number for r in retrieved]
         full_articles = [corpus_index[n] for n in retrieved_numbers if n in corpus_index]
         answer = gen_client.answer(ex.question, full_articles)
@@ -88,6 +95,9 @@ def run_evaluation(
         mlflow.log_param("no_answer_question_count", len(abstention_rows))
         mlflow.log_param("top_k", top_k)
         mlflow.log_param("ragas_enabled", run_ragas)
+        mlflow.log_param("use_hybrid", use_hybrid)
+        mlflow.log_param("alpha", alpha if use_hybrid else None)
+        mlflow.log_param("expand", expand)
         if hit_rate is not None:
             mlflow.log_metric("hit_rate", hit_rate)
         if mean_precision is not None:
