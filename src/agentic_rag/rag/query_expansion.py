@@ -52,5 +52,6 @@ def expand_query(question: str) -> str:
         )
         expanded = response.choices[0].message.content.strip()
         return expanded or question
-    except Exception:
+    except Exception:  # noqa: BLE001 -- deliberately broad: any expansion
+        # failure should fall back to the original question, not break retrieval.
         return question

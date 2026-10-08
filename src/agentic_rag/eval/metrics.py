@@ -7,6 +7,10 @@ reproducible across the whole golden set instead of one anecdotal query.
 """
 from __future__ import annotations
 
+import os
+
+from openai import OpenAI
+
 
 def hit_at_k(retrieved: list[int], expected: list[int]) -> bool:
     """True if any expected article appears anywhere in the retrieved list."""
@@ -49,9 +53,6 @@ def contains_abstention(answer: str) -> bool:
     correct article to retrieve, the correct behavior is abstaining)."""
     lowered = answer.lower()
     return any(marker.lower() in lowered for marker in _ABSTENTION_MARKERS)
-
-import os
-from openai import OpenAI
 
 _judge_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 

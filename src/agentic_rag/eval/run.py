@@ -18,7 +18,11 @@ import mlflow
 from agentic_rag.api.generation import GenerationClient, format_article_block
 from agentic_rag.config import REPO_ROOT
 from agentic_rag.eval.golden_set import GoldenExample, load_golden_set
-from agentic_rag.eval.metrics import contains_abstention, hit_at_k, precision_at_k, contains_abstention_llm
+from agentic_rag.eval.metrics import (
+    contains_abstention_llm,
+    hit_at_k,
+    precision_at_k,
+)
 from agentic_rag.rag.corpus import load_corpus_index
 from agentic_rag.rag.pipeline import retrieve
 
