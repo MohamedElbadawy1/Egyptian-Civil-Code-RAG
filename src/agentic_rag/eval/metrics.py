@@ -11,6 +11,19 @@ import os
 
 from openai import OpenAI
 
+_judge_client: OpenAI | None = None
+
+
+def _get_judge_client() -> OpenAI:
+    """Lazy singleton: created on first use, not at import time, so
+    importing this module never fails just because OPENAI_API_KEY isn't
+    set (e.g. in CI test collection, or code paths that never call
+    contains_abstention_llm)."""
+    global _judge_client
+    if _judge_client is None:
+        _judge_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _judge_client
+
 
 def hit_at_k(retrieved: list[int], expected: list[int]) -> bool:
     """True if any expected article appears anywhere in the retrieved list."""
@@ -32,14 +45,12 @@ def precision_at_k(retrieved: list[int], expected: list[int]) -> float:
 # which asks the model to say so explicitly when context is insufficient)
 # but will miss paraphrased refusals and could false-positive on an answer
 # that happens to contain one of these words. Treat abstention_rate as a
-# directional signal, not a precise score -- see docs/07.
+# directional signal, not a precise score -- see docs/07. Kept as a fast
+# fallback; the official abstention_rate is computed via
+# contains_abstention_llm() below.
 _ABSTENTION_MARKERS = [
     "لا تتوفر", "لا توجد معلومات", "لا يغطي", "خارج نطاق", "غير كافية",
-    "لا يحتوي", "لا تتضمن", "غير متوفرة",
-     "لا يمكن",       
-    "لا توجد",       
-    "لا تحتوي",
-    "لا تتضمن",  
+    "لا يحتوي", "لا تتضمن", "غير متوفرة", "لا يمكن", "لا توجد", "لا تحتوي",
     "do not have", "does not have", "not contain", "not covered",
     "cannot answer", "no information", "insufficient information",
     "outside the scope", "not available in",
@@ -54,13 +65,11 @@ def contains_abstention(answer: str) -> bool:
     lowered = answer.lower()
     return any(marker.lower() in lowered for marker in _ABSTENTION_MARKERS)
 
-_judge_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-
 
 def contains_abstention_llm(question: str, answer: str) -> bool:
     """LLM-judged abstention check for the golden set's expect_no_answer
     questions. Robust to paraphrasing (unlike the substring heuristic
-    above, which repeatedly missed new refusal phrasings in practice —
+    above, which repeatedly missed new refusal phrasings in practice --
     see docs/07-evaluation-monitoring.md for the history).
 
     Only used on the ~2 deliberately out-of-scope questions in the
@@ -77,7 +86,7 @@ def contains_abstention_llm(question: str, answer: str) -> bool:
     )
     # gpt-5-mini is a reasoning model and rejects non-default temperature,
     # same constraint as GenerationClient.answer() in api/generation.py
-    response = _judge_client.chat.completions.create(
+    response = _get_judge_client().chat.completions.create(
         model="gpt-5-mini",
         messages=[{"role": "user", "content": prompt}],
     )
