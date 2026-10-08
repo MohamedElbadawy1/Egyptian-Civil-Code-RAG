@@ -252,3 +252,50 @@ relevancy/context scores are all in the 0.8-0.9 range.
   (a retrieval problem) or retrieve the same ones but the model
   reasons about them differently (a generation/prompt problem). That
   distinguishes which half of the pipeline to fix.
+
+## Fixing the abstention_rate measurement (2026-10-08)
+
+### Problem
+After expanding the golden set to 40 questions, `abstention_rate` dropped
+from 1.0 to 0.5, even though the model was actually abstaining correctly
+on `noanswer-01` (the general-theft-penalty question). The issue wasn't
+the model — it was the measurement itself. `contains_abstention()` relied
+on substring matching against a fixed list of refusal phrases.
+
+### Investigation
+Across three consecutive eval runs, the model's abstention for the same
+question came back worded three different ways, all with the same
+meaning but different verbs:
+1. "لا يمكن تحديد عقوبة السرقة العامة" ("cannot determine the penalty")
+2. "لا يمكنني بيان عقوبة السرقة" ("cannot state the penalty")
+3. "لا تورد نصاً يحدد عقوبة جريمة السرقة العامة صراحةً" ("[the excerpts] do not provide text that explicitly specifies the penalty")
+
+Each attempt to widen the marker list caught the previous phrasing but
+missed the new one — a structural whack-a-mole problem with substring
+matching, not a gap that more markers could close.
+
+### Fix
+Replaced the deterministic substring check with an LLM-judge function
+(`contains_abstention_llm`), used only on the `expect_no_answer`
+questions (2 of 40), so the added cost is negligible. It asks the model
+a direct yes/no question — is this answer a genuine abstention or a
+substantive answer? — which generalizes across phrasing instead of
+relying on a hardcoded list.
+
+The old `contains_abstention()` substring heuristic was kept as a fast
+fallback but is no longer used to compute the official `abstention_rate`.
+
+### Result
+| Metric | Before fix | After fix |
+|---|---|---|
+| abstention_rate | 0.5 | **1.0** |
+| hit_rate | 0.763 | 0.763 (unaffected, as expected) |
+| mean_precision | 0.153 | 0.153 |
+| ragas_faithfulness | — | 0.940 |
+| ragas_answer_relevancy | — | 0.692 |
+| ragas_context_precision | — | 0.872 |
+| ragas_context_recall | — | 0.896 |
+
+This run (MLflow run `7a310b17109c4df1a9f2700c2a960a5d`) is adopted as
+the official **pre-hybrid-search baseline**, saved to
+`reports/evaluation_before_hybrid.csv`.
