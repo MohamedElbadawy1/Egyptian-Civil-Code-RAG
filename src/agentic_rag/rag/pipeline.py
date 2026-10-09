@@ -65,18 +65,19 @@ def retrieve(
     query: str,
     top_k: int = 5,
     embedding_client: OpenAIEmbeddingClient | None = None,
-    use_hybrid: bool = False,
+    use_hybrid: bool = True,
     alpha: float = 0.5,
-    expand: bool = False,
+    expand: bool = True,
 ) -> list[RetrievedArticle]:
     """Embed a user query and return the top-k matching articles, deduped
     across the Arabic/English vector pair for each article.
 
-    expand=True rewrites the query through expand_query() first, adding
-    formal legal terminology (e.g. "الشهر العقاري" alongside "تسجيل") so
-    BM25 and the embedding both have the Code's actual vocabulary to
-    match against -- see docs/10-query-expansion.md for why hybrid
-    search alone couldn't close this specific gap.
+    Defaults to hybrid search + query expansion as of docs/09 and
+    docs/10 -- measurably better on every metric tested (hit_rate,
+    mean_precision, all RAGAS scores) with no regressions, and this is
+    what directly fixed the original Article 934 retrieval failure.
+    Callers that want the old pure-vector behavior (e.g. a clean
+    baseline comparison) pass use_hybrid=False, expand=False explicitly.
     """
     search_query = expand_query(query) if expand else query
     client = embedding_client or OpenAIEmbeddingClient()
