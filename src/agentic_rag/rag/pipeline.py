@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import mlflow
-
 from agentic_rag.rag import vectorstore
 from agentic_rag.rag.chunking import Chunk, build_chunks
 from agentic_rag.rag.embeddings import OpenAIEmbeddingClient
@@ -31,6 +29,11 @@ def index_corpus(processed_json_path: Path, embedding_client: OpenAIEmbeddingCli
     different embedding_text() output) are comparable later instead of
     only living in scrollback -- see docs/05-experiment-tracking.md.
     """
+    # Imported here (not at module level) so importing this module from the
+    # API process (main.py -> pipeline.retrieve) doesn't pay mlflow's import
+    # cost -- it's only needed for this indexing function, never for /ask.
+    import mlflow
+    
     articles = load_articles(processed_json_path)
     chunks: list[Chunk] = build_chunks(articles)
 
