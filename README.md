@@ -1,3 +1,12 @@
+---
+title: Egyptian Civil Code RAG
+emoji: ⚖️
+colorFrom: green
+colorTo: red
+sdk: gradio
+app_file: app.py
+pinned: false
+---
 # Egyptian Civil Code RAG
 
 An Arabic/English legal RAG (Retrieval-Augmented Generation) assistant that

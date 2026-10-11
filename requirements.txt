@@ -1,7 +1,4 @@
-google-genai>=0.3
-openai
+gradio>=4.0
+openai>=1.40
 weaviate-client>=4.9
 python-dotenv>=1.0
-pytest
-ruff
-black
