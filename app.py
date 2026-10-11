@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 import gradio as gr
+import spaces
 
 from agentic_rag.api.generation import GenerationClient
 from agentic_rag.rag.corpus import load_corpus_index
@@ -29,6 +30,13 @@ def get_generation_client() -> GenerationClient:
     return _generation_client
 
 
+# Decorated with @spaces.GPU purely to satisfy ZeroGPU hardware's startup
+# check ("No @spaces.GPU function detected") -- this account can't use
+# plain CPU-basic hardware without a PRO subscription. Nothing inside
+# this function actually touches a GPU; it's all external API calls
+# (OpenAI, Weaviate Cloud), so duration=60 is just a safety cap on the
+# allocation, never expected to be hit.
+@spaces.GPU(duration=60)
 def answer_question(message: str, history: list) -> str:
     question = message.strip()
     if not question:
