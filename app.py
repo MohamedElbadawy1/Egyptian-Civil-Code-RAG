@@ -6,6 +6,15 @@ in src/agentic_rag/api/main.py; only the UI layer differs here.
 """
 from __future__ import annotations
 
+# Forced eager import, done here deliberately. FastAPI lazily imports
+# pydantic.v1 while gradio builds its OAuth route during ChatInterface
+# init -- that lazy import races with background threads gradio/uvicorn
+# spin up by then, hitting a known CPython import-lock KeyError bug.
+# Importing it here, first, single-threaded, sidesteps the race entirely:
+# by the time fastapi does its own `from pydantic import v1`, it's
+# already in sys.modules and the race-prone code path never runs.
+import pydantic.v1  # noqa: F401
+
 import sys
 from pathlib import Path
 
