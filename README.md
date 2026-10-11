@@ -1,3 +1,4 @@
+🔗 **[Live demo on Hugging Face Spaces](https://huggingface.co/spaces/M0hamedElbadawy/egyptian-civil-code-rag)**
 ---
 title: Egyptian Civil Code RAG
 emoji: ⚖️
