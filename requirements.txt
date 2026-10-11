@@ -1,4 +1,4 @@
-gradio>=4.0
+gradio==4.44.1
 spaces
 openai>=1.40
 weaviate-client>=4.9
